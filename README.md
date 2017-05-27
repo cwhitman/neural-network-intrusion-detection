@@ -4,7 +4,7 @@ This project is an attempt to create a neural network intrusion detection system
 Currently, a simple nueral network using the [K-Means clustering algorithm](https://en.wikipedia.org/wiki/K-means_clustering) has been designed to detect FTP password guessing attacks.
 The network correctly identifies around 80% of normal connections and 95% of attacks for the test cases.
 
-##TODO
+## TODO
 
  - Find/design a parser for tcp dump data.
  

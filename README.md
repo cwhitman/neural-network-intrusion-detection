@@ -4,20 +4,7 @@ This project is an attempt to create a neural network intrusion detection system
 Currently, a simple nueral network using the [K-Means clustering algorithm](https://en.wikipedia.org/wiki/K-means_clustering) has been designed to detect FTP password guessing attacks.
 The network correctly identifies around 80% of normal connections and 95% of attacks for the test cases.
 
-## TODO
+## Organization
 
- - Find/design a parser for tcp dump data.
- 
- - Experiment with self-organizing maps and heiarcical clustering algorithms.
- 
- - Experiment with recurrant neural networks.
- 
- - Experiment with using data from routers. 
- 
- - Similate DOS/DDOS attacks.
- 
- - Create nueral network that detects DOS attacks.
- 
- - Create nueral network taht detects DDOS attacks.
- 
+ All TODOs for the project are listed under [issues](https://github.com/cwhitman/neural-network-intrusion-detection/issues). Any intermediate research that is made will be posted under the relevant issue.
  

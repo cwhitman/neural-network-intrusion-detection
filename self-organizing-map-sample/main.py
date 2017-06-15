@@ -22,7 +22,7 @@ class SOM(object):
             alpha: Learning rate
             sigma: Initial neighborhood value. Defined to be max(n,m)/2 if not set.
     """
-    def __init__(self, m, n, dim, n_iterations=100, alpha=0.3, sigma=None):
+    def __init__(self, m, n, dim, n_iterations=1000, alpha=0.3, sigma=None):
 
         #initializing values
         self._m = m

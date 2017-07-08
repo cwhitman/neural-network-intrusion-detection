@@ -10,8 +10,14 @@ The network correctly identifies around 80% of normal connections and 95% of att
  
  Once implemented, the total neural network system will be organized into three pieces:
  
-   1. Data Input Formatting: Reads in the data and formats it into a tensor that the network can use.
+   1. Data Input Formatting: Reads in the data and formats it into a tensor that the network can use. (Complete)
    
-   2. Neural Network: The neural network itself. Uses anomaly detection in order to seperate attacks from non-attacks.
+   2. Neural Network: The neural network itself. Uses self-organizing maps in order to separate attacks from non-attacks. (In Progress)
+    
+       - Train: Train the neural network. Structures the centroids so that they match the approximate distribution of the input data.
+
+       - Identification: Identify which parts of the map correspond to attack traffic and which parts correspond to normal traffic.
+
+       - Test: Run test data on the network and see what percentage of attacks/normal traffic is correctly identified. 
    
-   3. Data Output Formatting: Format the data from the neural network into a human readable format.
+   3. Data Output Formatting: Format the data from the neural network into a human readable format. (In Progress)

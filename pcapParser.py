@@ -26,6 +26,17 @@ class pcapParser():
     def pcap_dictionary(self):
         return self.__normalizeData__()
 
+    """Returns the normalized pcap file in list form.
+       If the stored pcap list is large, this method may take a while to return as it normalizes the data before returning it.
+       Returns: [Time of last connection, Total number of connections,Average Time between connection,
+       Total number of connections last hour, Total number of connections this month]"""
+    def pcap_list(self):
+        dict = self.pcap_dictionary()
+        list = []
+        for key in dict:
+            list.append(dict[key])
+        return list
+
     """Updates the connections last hour and connections this month values in the __pcap_dictionary__.
         Checks to see if it has been an hour and/or month since that value was last updated and then resets the
         values appropriately.

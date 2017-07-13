@@ -44,7 +44,7 @@ class SOM(object):
             self._weightage_vects = tf.Variable(tf.random_normal(
                 [m * n, dim],dtype=tf.float32),dtype=tf.float32)
 
-            # Matrix of size [m*n, 2] for SOM grid locations
+            # Matrix of size m * n for SOM grid locations
             # of neurons
             self._location_vects = tf.constant(np.array(
                 list(self._neuron_locations(m, n))))
@@ -68,6 +68,7 @@ class SOM(object):
             # neuron's weightage vector and the input, and returns the
             # index of the neuron which gives the least value
             #Will need to change if we ever use something besides Euclidean distance
+            #For a given nueron i, bmu = min( ||w_i(n) - x(n)||)
             bmu_index = tf.argmin(tf.sqrt(tf.reduce_sum(
                 tf.pow(tf.subtract(self._weightage_vects, tf.stack(
                     [self._vect_input for i in range(m * n)])), 2), 1)),0)
@@ -84,7 +85,6 @@ class SOM(object):
             #Both alpha and sigma are defined by
             # x= x_0 * (1-i/n) where x is alpha/sigma, x_0 is the initial value, i is the current iteration, and n is
             #the total number of iterations.
-            #Will need to mess with this rate when we implement this.
             learning_rate_op = tf.subtract(1.0, tf.div(self._iter_input,
                                                   self._n_iterations))
             _alpha_op = tf.multiply(alpha, learning_rate_op)
@@ -94,7 +94,8 @@ class SOM(object):
             # Construct the op that will generate a vector with learning
             # rates for all neurons, based on iteration number and location
             # wrt BMU.
-            #learning rates decrease with time
+            #Neighborhood functions is a gaussian apodization function, often written as h(n).
+            #h(n) = e ^ -( || r_i - r_b || ^2 / sigma(n)^2 ) where r_i are the inputs and r_b are the corresponding bmus.
             bmu_distance_squares = tf.reduce_sum(tf.pow(tf.subtract(
                 self._location_vects, tf.stack(
                     [bmu_loc for i in range(m * n)])), 2), 1)
@@ -105,7 +106,7 @@ class SOM(object):
             #Finally, the op that will use learning_rate_op to update
             #the weightage vectors of all neurons based on a particular
             #input
-
+            #w_i(n+1) = w_i(n) + alpha(n) * h(n) * (x(n) - w_i(n))
             learning_rate_multiplier = tf.stack([tf.tile(tf.slice(
                 learning_rate_op, np.array([i]), np.array([1])), [dim])
                                                for i in range(m*n)])
@@ -152,11 +153,12 @@ class SOM(object):
 
         self._trained = True
 
+    """
+    Returns a list of 'm' lists, with each inner list containing
+    the 'n' corresponding centroid locations as 1-D NumPy arrays.
+    """
     def get_centroids(self):
-        """
-        Returns a list of 'm' lists, with each inner list containing
-        the 'n' corresponding centroid locations as 1-D NumPy arrays.
-        """
+
         if not self._trained:
             raise ValueError("SOM not trained yet")
         return self._centroid_grid
@@ -164,7 +166,8 @@ class SOM(object):
     """
     Maps each input vector to the relevant neuron in the SOM
     grid.
-    'input_vects' should be an iterable of 1-D NumPy arrays with
+    Args:
+        input_vects: an iterable of 1-D NumPy arrays with
     dimensionality as provided during initialization of this SOM.
     Returns a list of 1-D NumPy arrays containing (row, column)
     info for each input vector(in the same order), corresponding
@@ -185,6 +188,29 @@ class SOM(object):
         return to_return
 
     """
+    Displays which nuerons are being hit using colors.
+    The more packets that arive at a nueron, the darker the color (+0.2 alpha value for each packet).
+    Args:
+        pcap_file: A dictionary of packets created via the pcapParser.
+    Returns: An array of RGBA color values that can be plotted using mat plot lib
+    """
+    def color_inputs(self,pcap_file):
+        if not self._trained:
+            raise ValueError("SOM not trained yet")
+        #Base color is red
+        base_color = [1,0,0,0]
+        #Setting up color array
+        colors = [ [base_color[:] for _ in range (0,self._n)] for _ in range(0,self._m)]
+        #populating color array using input data.
+        for key in pcap_file:
+            min_index = min([i for i in range(len(self._weightages))],
+                            key=lambda x: np.linalg.norm(pcap_file[key] -
+                                                         self._weightages[x]))
+            color = colors[self._locations[min_index][0]][self._locations[min_index][1]]
+            color[3]+=0.2
+        return colors
+
+    """
     Yields one by one the 2-D locations of the individual neurons
     in the SOM.
     """
@@ -196,7 +222,7 @@ class SOM(object):
             for j in range(n):
                 yield np.array([i, j])
 
-
+#Sample training using an array of colors.
 def main():
     # Training inputs for RGBcolors
     colors = np.array(
@@ -221,8 +247,8 @@ def main():
          'cyan', 'violet', 'yellow', 'white',
          'darkgrey', 'mediumgrey', 'lightgrey']
 
-    # Train a 20x30 SOM with 400 iterations
-    som = SOM(20, 30, 3, 400)
+    #(m, n, dim, n_iterations=1000, alpha=0.3, sigma=None)
+    som = SOM(n=40, m=40, dim=3,n_iterations=40)
     som.train(colors)
 
     # Get output grid

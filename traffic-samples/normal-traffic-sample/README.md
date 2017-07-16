@@ -3,7 +3,7 @@
 Simulated normal traffic. Traffic was simulated using [Distributed Internet Traffic Generator](http://www.grid.unina.it/software/ITG/)(D-ITG).
 For now, only simple single traffic simulations were carried out one at a time. In the future, simultaneous, advanced simulations can be carried out at once using
 D-ITG's script function.
-Traffic was captured using tcpdump with the command `tcpdump -n -nn -i any -w capture_file`.
+Traffic was captured using tcpdump with the command `tcpdump -i any -w capture_file`.
 
 ## File Description
 

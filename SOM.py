@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from matplotlib import pyplot as plt
+import re
 
 """
 A simple test of a self organizing map neural network.
@@ -189,7 +190,10 @@ class SOM(object):
 
     """
     Displays which nuerons are being hit using colors.
-    The more packets that arive at a nueron, the darker the color (+0.2 alpha value for each packet).
+	Attack traffic (10.0.0.128 to 10.0.0.254 inclusive) is colored red.
+	Normal traffic (10.0.0.2 to 10.0.0.127 inclusive) is colored blue.
+	Other traffic, like OS generated traffic, is colored in green.
+    The more ips that arive at a nueron, the darker the color (+0.2 alpha value for each ip).
     Args:
         pcap_file: A dictionary of packets created via the pcapParser.
     Returns: An array of RGBA color values that can be plotted using mat plot lib
@@ -197,17 +201,29 @@ class SOM(object):
     def color_inputs(self,pcap_file):
         if not self._trained:
             raise ValueError("SOM not trained yet")
-        #Base color is red
-        base_color = [1,0,0,0]
         #Setting up color array
-        colors = [ [base_color[:] for _ in range (0,self._n)] for _ in range(0,self._m)]
+        colors = [ [[0,0,0,0] for _ in range (0,self._n)] for _ in range(0,self._m)]
+        #To check for bad/good ip
+        prog = re.compile("\d+\.\d+.\d+.(\d+)")
         #populating color array using input data.
         for key in pcap_file:
             min_index = min([i for i in range(len(self._weightages))],
                             key=lambda x: np.linalg.norm(pcap_file[key] -
                                                          self._weightages[x]))
             color = colors[self._locations[min_index][0]][self._locations[min_index][1]]
-            color[3]+=0.2
+            result = prog.match(key)
+            if(result):
+                end_ip = int(result.group(1))
+                if(end_ip>=2 and end_ip<=127):
+                    color[2]=1.0 #blue
+                elif(end_ip <=254):
+                    color[0]=1.0 #red
+                else:
+                    color[1]=1.0 #green
+            else:
+                color[1] = 1.0 #green
+            if color[3]<=0.8:
+                color[3]+=0.2
         return colors
 
     """

@@ -2,7 +2,7 @@
 
 DOS and DDOS traffic. DDOS traffic was generated using virtual machines. 
 Due to limited resources, our DDOS traffic does not completely match DDOS traffic, which is often generated using thousands or millions of machines.
-Traffic was captured using tcpdump with the command `tcpdump -n -nn -i any -w capture_file'.
+Traffic was captured using tcpdump with the command `tcpdump -i any -w capture_file'.
 Due to github's limit on file size, large files are broken down into smaller ones using `tcpdump -r old_file -w new_files -C 100`.
 
 ## File Description

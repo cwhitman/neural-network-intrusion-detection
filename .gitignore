@@ -108,3 +108,7 @@ FTPParseLog.log
 
 # xml files
 *.xml
+
+#Specific tcpdump files.
+sample_data01.tcpdump
+tcpdump.list

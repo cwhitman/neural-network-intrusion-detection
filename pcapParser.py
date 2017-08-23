@@ -1,170 +1,184 @@
 from scapy.all import *
 import netaddr
 import sys
+from AttackLabelParser import AttackLabels
+from datetime import datetime
 
-
-"""Contains functions designed to parse pcap files using scapy-python3: https://github.com/phaethon/scapy.
-   Windows machines require winpcap to work with scapy: https://www.winpcap.org/
-
-   After initialization, parsed, normalized pcap file can be accessed through the method pcap_dictionary().
-   """
 class pcapParser():
+    """Contains functions designed to parse pcap files using scapy-python3: https://github.com/phaethon/scapy.
+       Windows machines require winpcap to work with scapy: https://www.winpcap.org/
 
-    """Parses the pcap file and stores it in self.pcap_array.
-	   Args:
-			pcap_file: A valid pcap file.
-			pcap_files: Additional pcap files."""
-    def __init__(self,pcap_file,*pcap_files):
-        self.__pcap_dictionary__ = {}
-        self.__pcap_dictionary_data__ = {}
-        self.addFileToDictionary(pcap_file,*pcap_files)
+       After initialization, parsed, normalized pcap file can be accessed through the method tensors().
+       """
 
-    """Returns the normalized pcap file in dictionary form.
-       If the stored pcap dictionary is large, this method may take a while to return as it normalizes the data before returning it.
-       Returns: { ip , [Time of last connection, Total number of connections,Average Time between connection,
-       Total number of connections last hour, Total number of connections this month] }"""
-    def pcap_dictionary(self):
-        return self.__normalizeData__()
+    def __init__(self,pcap_file,label_file):
+        """Parses the pcap file and stores it in self.pcap_array.
+           Args:
+                pcap_file: A valid pcap file.
+                label_file: The tcpdump.list file containing attack labels.
+                """
+        self.__ip_dictionary__ = {}
+        self.__tensors__ = []
+        self.labler = AttackLabels(label_file)
+        self.addFileToTensor(pcap_file)
 
-    """Returns the normalized pcap file in list form.
-       If the stored pcap list is large, this method may take a while to return as it normalizes the data before returning it.
-       Returns: [Time of last connection, Total number of connections,Average Time between connection,
-       Total number of connections last hour, Total number of connections this month]"""
-    def pcap_list(self):
-        dict = self.pcap_dictionary()
-        list = []
-        for key in dict:
-            list.append(dict[key])
-        return list
+    def tensors(self):
+        """Returns [[ exponential moving average of time between packets,
+                     total number of packets received in last second,
+                     protocol type,
+                     bytes sent,
+                     average Time between connection for this IP,
+                     total number of connections for this IP]
+           Return time is order n as the method normalizes the data before returning it.
+           """
+        return [x[0] for x in self.__normalizeData__(self.__tensors__)]
 
-    """Updates the connections last hour and connections this month values in the __pcap_dictionary__.
-        Checks to see if it has been an hour and/or month since that value was last updated and then resets the
-        values appropriately.
-       Args:
-            time: The current time as seconds since the epoc.
-        Retuns: self.__pcap_dictionary__"""
-    def updateConnectionTimes(self,time):
-        for key in self.__pcap_dictionary__:
-            if __name__ == '__main__':
-                if(time - self.__pcap_dictionary_data__[key][0] > 3600): #total number of connections last hour
-                    self.__pcap_dictionary_data__[key][0]=time
-                    self.__pcap_dictionary__[key][3] = 0
-                if (time - self.__pcap_dictionary_data__[key][1] > 3600):  # total number of connections last month
-                    self.__pcap_dictionary_data__[key][1] = time
-                    self.__pcap_dictionary__[key][4] = 0
+    def labeledTensors(self):
+        """Returns [(
+                    [
+                     exponential moving average of time between packets,
+                     total number of packets received in last second,
+                     protocol type,
+                     bytes sent,
+                     average Time between connection for this IP,
+                     total number of connections for this IP],
+                    is_attack,
+                    attack name
+                    )
+                    ]
+           Return time is order n as the method normalizes the data before returning it.
+        """
+        return self.__normalizeData__(self.__tensors__)
 
-    """Adds the pcap files to self.__pcap_dictionary__.
-       self.__pcap_dictionary__ is a dictionary where key is the source IP and value is
-       the tuple, [Time of last connection, Total number of connections,Average Time between connection,
-       Total number of connections last hour, Total number of connections this month].
-        self.__pcap_dictionary_data__ is used to keep track of things such as hour_last_reset for each entry.
-        It is organized as { ip, [hour_last_reset,month_last_reset] }
-       Args:
-            pcap_files: Any number of valid pcap file names.
-        Retuns: self.__pcap_dictionary__"""
-    def addFileToDictionary(self,*pcap_files):
-        for pcap_file in pcap_files:
-            with PcapReader(pcap_file) as pcap_reader:
-                last_time = -1
-                for packet in pcap_reader:
-                    try: #Some packets, such as ARP, don't contain a source IP address.
-                        src = packet.payload.src
-                    except AttributeError:
-                        src = "No IP"
+    def addFileToTensor(self, pcap_file,label_file=None):
+        """Adds the pcap file to the tensor.
+           Args:
+                pcap_file: A valid pcap file.
+                label_file: The tcpdump.list file containing attack labels.
+            """
 
-                    if(src not in self.__pcap_dictionary__): #Add ip to dictionary
-                        self.__pcap_dictionary__[src] = [packet.time, 0.0, 0.0, 0.0, 0.0]
-                        self.__pcap_dictionary_data__[src] = [float(packet.time), float(packet.time)]
+        if label_file is not None:
+            labler.readFile(label_file)
 
-                    list = self.__pcap_dictionary__[src]
-                    list_data = self.__pcap_dictionary_data__[src]
+        with PcapReader(pcap_file) as pcap_reader:
+            last_time = -1
+            exponential_average=0
+            time_tensor = []
+            for packet in pcap_reader:
 
-                    list[1]+=1 #total number of connections
-                    time_diff = packet.time - list[0] #average time between connections
-                    list[2] = (list[2]*list[1] + time_diff)/list[1]
-                    list[0]=packet.time #time of last connection
-                    last_time = packet.time
-                    if(packet.time - list_data[0] > 3600): #total number of connections last hour
-                        list_data[0] = packet.time
-                        list[3] = 0
-                    else:
-                        list[3]+=1
-                    if(packet.time - list_data[1] > 2592000):#total number of connetions last month
-                        list_data[1] = packet.time
-                        list[4] = 0
-                    else:
-                        list[4] += 1
+                #Get fields.
+                #Some packets, such as ARP, are missing most of the fields we are training on.
 
-                #Update the connections last hour and connections last month field
-                #based on the time that the last packet arrived.
-                if (last_time != -1):
-                    self.updateConnectionTimes(last_time)
-        return self.__pcap_dictionary__
+                #Source IP
+                try:
+                    src = packet.payload.src
+                except AttributeError:
+                    src = ""
+                #Destination IP
+                try:
+                    dst = packet.payload.dst
+                except AttributeError:
+                    dst = ""
 
+                #Source port
+                try:
+                    sport = packet.payload.sport
+                except:
+                    sport = ""
 
+                #Destination port
+                try:
+                    dport = packet.payload.dport
+                except:
+                    dport=""
 
-    """Normalizes all values inside the dictionary using the function 1/(1/+x).
-        Args:
-            dictionary: dictionary produced using addFileToDictionary. Defaults to self.__pcap_dictionary__.
-        Returns:
-            The same dictionary with all values normalized."""
-    def __normalizeData__(self,dictionary = None):
-        if(dictionary is None):
-            dictionary = self.__pcap_dictionary__
-        new_dictionary={}
-        for key in dictionary:
-             new_dictionary[key]= [1/(1+x) for x in dictionary[key]]
-        return new_dictionary
+                # Add ip to dictionary
+                if(src not in self.__ip_dictionary__):
+                    self.__ip_dictionary__[src] = [0.0, 0.0, 0.0]
+                    #[Time of last connection for ip,
+                    #average Time between connection for this IP,
+                    #total number of connections for this IP]
 
-    """Un-normalizes all values inside the dictionary assuming that all values were perviously normalized using 1/(1/+x).
+                #Update time difference
+                if last_time != -1:
+                    time_diff = packet.time - last_time
+                else:
+                    time_diff=0
+
+                #new tensor
+                tensor=[]
+
+                #Data for that tensors IP
+                ip_data = self.__ip_dictionary__[src]
+
+                #time between packets
+                tensor.append(self.exponentialMovingAverage(time_diff,exponential_average,0.1))
+
+                #Packets in last second.
+                time_tensor.append(packet.time)
+                new_time_tensor = [ x for x in time_tensor if packet.time-x <1]
+                time_tensor = new_time_tensor
+                tensor.append(len(time_tensor))
+
+                #Packet prototype
+                try:
+                    proto=packet.proto
+                except AttributeError:
+                    proto=0.0
+                tensor.append(float(proto))
+
+                #Payload length
+                try:
+                    tensor.append(float(packet.payload.len))
+                except AttributeError:
+                    tensor.append(0.0)
+
+                #Total number of connections for this IP
+                ip_data[2]+=1
+                tensor.append(ip_data[2])
+
+                #Average time between connections for this IP
+                ip_time_diff = packet.time - ip_data[0] #average time between connections
+                ip_data[1] = (ip_data[1]*ip_data[2] + ip_time_diff)/ip_data[2]
+                tensor.append(ip_data[1])
+
+                # time of last connection (IP data only. Not added to tensor.)
+                ip_data[0]=packet.time
+                last_time = packet.time
+
+                attack = self.labler.isAttack(src,dst,sport,dport,packet.time)
+                attack_name = self.labler.attackNames(src,dst,str(sport),str(dport),packet.time)
+                self.__tensors__.append((tensor,attack,attack_name))
+        return self.__tensors__
+
+    def __normalizeData__(self,tensors = None):
+        """Normalizes all values inside the tensor using the function 1/(1/+x).
             Args:
-                dictionary: dictionary produced using addFileToDictionary. Defaults to self.__pcap_dictionary__.
+                tensors: tensors produced using addFileToDictionary. Defaults to self.__tensors__.
             Returns:
-                The same dictionary with all values un-normalized."""
-    def __unNormalizeData__(self, dictionary=None):
-        if (dictionary is None):
-            dictionary = self.__pcap_dictionary__
-        new_dictionary = {}
-        for key in dictionary:
-             new_dictionary[key]= [1/x -1 for x in dictionary[key]]
-        return new_dictionary
+                The same tensors with all values normalized.
+                """
+        if(tensors is None):
+            tensors = self.__tensors__
+        new_tensors=[]
+        for tensor in tensors:
+             new_tensors.append( ( [1/(1+x) for x in tensor[0] ] , tensor[1] ))
+        return new_tensors
 
-
-    """Parses the pcap file into a simple array as opposed to a dictionary.
-       May be removed in the future. Exists right now as an example.
-       Args:
-            pcap_files: Any number of valid pcap file names.
-       Returns: An array of arrays. Each inner array represents a packet.
-                Currenty, the array is structured as [source IP,protocol,packet type,length,time]
-                where each field is a float."""
-    def parseFile(self, *pcap_files):
-        return_array = []
-        for pcap_file in pcap_files:
-            with PcapReader(pcap_file) as pcap_reader:
-                for packet in pcap_reader:
-                    packet_array = []
-                    try:  # Things like ARP packets don't have a payload source.
-                        packet_array.append(float(int(netaddr.IPAddress(packet.payload.src))))
-                    except AttributeError:
-                        packet_array.append(0.0)
-                    packet_array.append(float(packet.proto))
-                    packet_array.append(float(packet.pkttype))
-                    try:  # Things like ARP packets don't have a packet length.
-                        packet_array.append(float(packet.len))
-                    except AttributeError:
-                        packet_array.append(0.0)
-                    packet_array.append(float(packet.time))
-                    return_array.append(packet_array)
-                print("%s file parsed" % (pcap_file))
-        return return_array
-
+    def exponentialMovingAverage(self,new,old, alpha):
+        """Returns the exponenatial moving average.
+           Params:
+                 new: new valuve to be added to the mean
+                 old: old mean
+                 alpha: value from 0 to 1 determining how quickly the old mean decays. A value of 1 completely forgets the old mean.
+            Returns: the new exponenatial moving average.
+            """
+        return alpha * new + (1 - alpha)* old
 
 if __name__ == '__main__':
     if(len(sys.argv) <= 1):
-        print("Usage: python pcapParser.py pcapfile1 pcapfile2 . . .")
+        print("Usage: python pcapParser.py tcpdumpFile tcpdumpList")
     else:
         argvs = sys.argv
         argvs.pop(0)
-        pcapPar = pcapParser(*argvs)
-
-        print(pcapPar.pcap_dictionary())
+        pcapPar = pcapParser(argvs[0],argvs[1])

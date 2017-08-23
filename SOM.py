@@ -14,16 +14,16 @@ class SOM(object):
     # To check if the SOM has been trained
     _trained = False
 
-    """
-        Args:
-            m: length of map
-            n: width of map
-            dim: dimension of training inputs
-            n_iterations: total number of iterations
-            alpha: Learning rate
-            sigma: Initial neighborhood value. Defined to be max(n,m)/2 if not set.
-    """
     def __init__(self, m, n, dim, n_iterations=1000, alpha=0.3, sigma=None):
+        """
+            Args:
+                m: length of map
+                n: width of map
+                dim: dimension of training inputs
+                n_iterations: total number of iterations
+                alpha: Learning rate
+                sigma: Initial neighborhood value. Defined to be max(n,m)/2 if not set.
+        """
 
         #initializing values
         self._m = m
@@ -128,14 +128,15 @@ class SOM(object):
             init_op = tf.global_variables_initializer()
             self._sess.run(init_op)
 
-    """
-    Trains the SOM.
-    'input_vects' should be an iterable of 1-D NumPy arrays with
-    dimensionality as provided during initialization of this SOM.
-    Current weightage vectors for all neurons(initially random) are
-    taken as starting conditions for training.
-    """
+
     def train(self, input_vects):
+        """
+        Trains the SOM.
+        'input_vects' should be an iterable of 1-D NumPy arrays with
+        dimensionality as provided during initialization of this SOM.
+        Current weightage vectors for all neurons(initially random) are
+        taken as starting conditions for training.
+        """
         #Training iterations
         for iter_no in range(self._n_iterations):
             #Train with each vector one by one
@@ -154,27 +155,29 @@ class SOM(object):
 
         self._trained = True
 
-    """
-    Returns a list of 'm' lists, with each inner list containing
-    the 'n' corresponding centroid locations as 1-D NumPy arrays.
-    """
+
     def get_centroids(self):
+        """
+        Returns a list of 'm' lists, with each inner list containing
+        the 'n' corresponding centroid locations as 1-D NumPy arrays.
+        """
 
         if not self._trained:
             raise ValueError("SOM not trained yet")
         return self._centroid_grid
 
-    """
-    Maps each input vector to the relevant neuron in the SOM
-    grid.
-    Args:
-        input_vects: an iterable of 1-D NumPy arrays with
-    dimensionality as provided during initialization of this SOM.
-    Returns a list of 1-D NumPy arrays containing (row, column)
-    info for each input vector(in the same order), corresponding
-    to mapped neuron.
-    """
+
     def map_vects(self, input_vects):
+        """
+        Maps each input vector to the relevant neuron in the SOM
+        grid.
+        Args:
+            input_vects: an iterable of 1-D NumPy arrays with
+        dimensionality as provided during initialization of this SOM.
+        Returns a list of 1-D NumPy arrays containing (row, column)
+        info for each input vector(in the same order), corresponding
+        to mapped neuron.
+        """
 
         if not self._trained:
             raise ValueError("SOM not trained yet")
@@ -188,17 +191,122 @@ class SOM(object):
 
         return to_return
 
-    """
-    Displays which nuerons are being hit using colors.
-	Attack traffic (10.0.0.128 to 10.0.0.254 inclusive) is colored red.
-	Normal traffic (10.0.0.2 to 10.0.0.127 inclusive) is colored blue.
-	Other traffic, like OS generated traffic, is colored in green.
-    The more ips that arive at a nueron, the darker the color (+0.2 alpha value for each ip).
-    Args:
-        pcap_file: A dictionary of packets created via the pcapParser.
-    Returns: An array of RGBA color values that can be plotted using mat plot lib
-    """
-    def color_inputs(self,pcap_file):
+    def color_map(self,labeledTensors):
+        """Displays which nuerons are being hit using colors.
+           Args:
+                labeledTensors: labeled tensors produced from the pcapParser.
+            Returns: An array of RGBA color values that can be plotted using mat plot lib"""
+
+        if not self._trained:
+            raise ValueError("SOM not trained yet")
+        #Setting up color array
+        colors = [ [[0,0,0,0] for _ in range (0,self._n)] for _ in range(0,self._m)]
+
+        for tensor in labeledTensors:
+            min_index = min([i for i in range(len(self._weightages))],
+                            key=lambda x: np.linalg.norm(tensor[0] -
+                                                         self._weightages[x]))
+            color = colors[self._locations[min_index][0]][self._locations[min_index][1]]
+
+            if(tensor[1]):
+                color[0] = 1.0  # red
+            else:
+                color[2]= 1.0   # blue
+
+            if color[3]<=0.99:
+                color[3]+=0.01 #Alpha value (color intensity)
+        return colors
+
+    def percentageIdentification(self, labeledTensors):
+        """Extremely simple identification that labels nuerson as attack or normal based on how many packets from each category land
+           on each nueron. Nuerons that have no packets are just labled as (0%,0%) right now.
+            Args:
+                labeledTensors: labeled tensors produced from the pcapParser.
+            Returns: An array of tuples representing attack/normal percentages. ( attack%, normal %)
+        """
+        if not self._trained:
+            raise ValueError("SOM not trained yet")
+        #Setting up a simple identification array [ attack#, normal#, total]
+        packet_nums = [ [[0,0,0] for _ in range (0,self._n)] for _ in range(0,self._m)]
+        for tensor in labeledTensors:
+            min_index = min([i for i in range(len(self._weightages))],
+                            key=lambda x: np.linalg.norm(tensor[0] -
+                                                         self._weightages[x]))
+            id = packet_nums[self._locations[min_index][0]][self._locations[min_index][1]]
+            id[2]+=1
+            if(tensor[1]):
+                id[0]+=1
+            else:
+                id[1]+=1
+
+        #Stupid fix for division problem
+        for row in packet_nums:
+            for id in row:
+                if id[2] ==0:
+                    id[2]=1
+        return [ [(id[0]/id[2],id[1]/id[2])for id in row] for row in packet_nums  ]
+
+    def getAccuracyMatrix(self,labeledTensors,percentages):
+        """Runs the tensors against the identification and returns the appropriate accuracy matrix.
+          Args:
+            labeledTensors: labeled tensors produced from the pcapParser.
+            percentages: Percentage of normal and attack traffic at a nueron. Defined as [ (attack%, normal%) ]
+        Returns: An array representing the confusion matrix.
+                [ [attack identified as attack, attack identified as normal, attack identified as other],
+                  [normal identified as attack, normal identified as normal, normal identifed as other]"""
+
+        #Setting up a simple identification array [ attack#, normal#, total]
+        accuracy_matrix = [ [0,0,0], [0,0,0]]
+        for tensor in labeledTensors:
+            min_index = min([i for i in range(len(self._weightages))],
+                            key=lambda x: np.linalg.norm(tensor[0] -
+                                                         self._weightages[x]))
+            percentage = percentages[self._locations[min_index][0]][self._locations[min_index][1]]
+
+            if (tensor[1]): #Packet is an attack
+                if percentage[0] > percentage[1]: #nueron is attack
+                    accuracy_matrix[0][0] += 1 #attack identified as attack
+                elif percentage[1] > percentage[0]: #nuerson is normal
+                    accuracy_matrix[0][1] += 1 #attack identified as normal
+                else:
+                    accuracy_matrix[0][2] += 1 #attack identifed as other
+            else: #Packet is normal
+                if percentage[0] > percentage[1]: #nueron is attack
+                    accuracy_matrix[1][0] += 1 #normal identifed as attack
+                elif percentage[1] > percentage[0]: #nueron is normal
+                    accuracy_matrix[1][1] += 1 #normal identifed as normal
+                else:
+                    accuracy_matrix[1][2] += 1 #normal identifed as other
+
+        return accuracy_matrix
+
+
+    def _neuron_locations(self, m, n):
+        """
+        Yields one by one the 2-D locations of the individual neurons
+        in the SOM.
+        """
+
+        # Nested iterations over both dimensions
+        # to generate all 2-D locations in the map
+        for i in range(m):
+            for j in range(n):
+                yield np.array([i, j])
+
+
+    def color_inputsOld(self,pcap_file):
+        """
+        USED ONLY FOR OUR SIMULATION DATA!
+
+        Displays which nuerons are being hit using colors.
+        Attack traffic (10.0.0.128 to 10.0.0.254 inclusive) is colored red.
+        Normal traffic (10.0.0.2 to 10.0.0.127 inclusive) is colored blue.
+        Other traffic, like OS generated traffic, is colored in green.
+        The more ips that arive at a nueron, the darker the color (+0.2 alpha value for each ip).
+        Args:
+            pcap_file: A dictionary of packets created via the pcapParser.
+        Returns: An array of RGBA color values that can be plotted using mat plot lib
+        """
         if not self._trained:
             raise ValueError("SOM not trained yet")
         #Setting up color array
@@ -206,12 +314,12 @@ class SOM(object):
         #To check for bad/good ip
         prog = re.compile("\d+\.\d+.\d+.(\d+)")
         #populating color array using input data.
-        for key in pcap_file:
+        for ip in pcap_file:
             min_index = min([i for i in range(len(self._weightages))],
-                            key=lambda x: np.linalg.norm(pcap_file[key] -
+                            key=lambda x: np.linalg.norm(pcap_file[ip] -
                                                          self._weightages[x]))
             color = colors[self._locations[min_index][0]][self._locations[min_index][1]]
-            result = prog.match(key)
+            result = prog.match(ip)
             if(result):
                 end_ip = int(result.group(1))
                 if(end_ip>=2 and end_ip<=127):
@@ -226,17 +334,100 @@ class SOM(object):
                 color[3]+=0.2
         return colors
 
-    """
-    Yields one by one the 2-D locations of the individual neurons
-    in the SOM.
-    """
-    def _neuron_locations(self, m, n):
 
-        # Nested iterations over both dimensions
-        # to generate all 2-D locations in the map
-        for i in range(m):
-            for j in range(n):
-                yield np.array([i, j])
+    def simpleIdentificationOld(self,pcap_file):
+        """
+            USED ONLY FOR OLD SIMULATION DATA!
+            Extremely simple identification that labels nuerson as attack or normal based on how many packets from each category land
+           on each nueron. Nuerons that have no packets are just labled as suspicious.
+            Args:
+                pcap_file: A dictionary of packets created via the pcapParser.
+            Returns: An array of tuples representing attack/normal percentages. ( attack%, normal %) """
+        if not self._trained:
+            raise ValueError("SOM not trained yet")
+        #Setting up a simple identification array [ attack#, normal#, total]
+        packet_nums = [ [[0,0,0] for _ in range (0,self._n)] for _ in range(0,self._m)]
+        #To check for bad/good ip
+        prog = re.compile("\d+\.\d+.\d+.(\d+)")
+        #populating identification array using input data.
+        for key in pcap_file:
+            min_index = min([i for i in range(len(self._weightages))],
+                            key=lambda x: np.linalg.norm(pcap_file[key] -
+                                                         self._weightages[x]))
+            id = packet_nums[self._locations[min_index][0]][self._locations[min_index][1]]
+
+            id[2] += 1
+
+            result = prog.match(key)
+
+            if(result):
+                end_ip = int(result.group(1))
+                if(end_ip>=2 and end_ip<=127):
+                    id[1]+=1
+                elif(end_ip <=254):
+                    id[0]+=1
+            else:
+                id[1]+=1
+
+        #Stupid fix for division problem
+        for row in packet_nums:
+            for id in row:
+                if id[2] ==0:
+                    id[2]=1
+        return [ [(id[0]/id[2],id[1]/id[2])for id in row] for row in packet_nums  ]
+
+
+    def getAccuracyMatrixOld(self,pcap_file,percentages):
+        """
+        USED ONLY FOR OLD SIMULATION DATA!
+
+        Runs the pcap_file against the identification and returns the appropriate accuracy matrix.
+          Args:
+            pcap_file: A dictionary of packets created via the pcapParser.
+            percentages: Percentage of normal and attack traffic at a nueron. Defined as [ (attack%, normal%) ]
+        Returns: An array representing the confusion matrix.
+                [ [attack identified as attack, attack identified as normal, attack identified as other],
+                  [normal identified as attack, normal identified as normal, normal identifed as other]"""
+        if not self._trained:
+            raise ValueError("SOM not trained yet")
+        #Setting up a simple identification array [ attack#, normal#, total]
+        accuracy_matrix = [ [0,0,0], [0,0,0]]
+        prog = re.compile("\d+\.\d+.\d+.(\d+)")
+        #populating identification array using input data.
+        for key in pcap_file:
+            min_index = min([i for i in range(len(self._weightages))],
+                            key=lambda x: np.linalg.norm(pcap_file[key] -
+                                                         self._weightages[x]))
+            percentage = percentages[self._locations[min_index][0]][self._locations[min_index][1]]
+
+            result = prog.match(key)
+            if(result):
+                end_ip = int(result.group(1))
+                if(end_ip>=2 and end_ip<=127):
+                    if percentage[0]>percentage[1]:
+                        accuracy_matrix[1][0]+=1
+                    elif percentage[1]>percentage[0]:
+                        accuracy_matrix[1][1]+=1
+                    else:
+                        accuracy_matrix[1][2]+=1
+                elif(end_ip <=254):
+                    if percentage[0]>percentage[1]:
+                        accuracy_matrix[0][0]+=1
+                    elif percentage[1]>percentage[0]:
+                        accuracy_matrix[0][1]+=1
+                    else:
+                        accuracy_matrix[0][2]+=1
+            else:
+                if percentage[0] > percentage[1]:
+                    accuracy_matrix[1][0] += 1
+                elif percentage[1] < percentage[0]:
+                    accuracy_matrix[1][1] += 1
+                else:
+                    accuracy_matrix[1][2] += 1
+
+        return accuracy_matrix
+
+
 
 #Sample training using an array of colors.
 def main():
@@ -264,7 +455,7 @@ def main():
          'darkgrey', 'mediumgrey', 'lightgrey']
 
     #(m, n, dim, n_iterations=1000, alpha=0.3, sigma=None)
-    som = SOM(n=40, m=40, dim=3,n_iterations=40)
+    som = SOM(n=40, m=40, dim=3,n_iterations=100)
     som.train(colors)
 
     # Get output grid

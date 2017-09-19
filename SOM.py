@@ -313,7 +313,7 @@ class SOM(object):
                 if name not in attack_names:
                     attack_names[name] = last_y
                     last_y += 1
-                attack_handle = plt.plot([attack[0], attack[1]], [attack_names[name], attack_names[name]], 'b')
+                plt.plot([attack[0], attack[1]], [attack_names[name], attack_names[name]], 'b')
 
         #Plotting each packet based on the results of the SOM
         current_attacks={}
@@ -328,9 +328,11 @@ class SOM(object):
                 starting_attacks = [starting_attack for starting_attack in attack_percentages if starting_attack not in current_attacks and starting_attack]
                 finished_attacks = [finished_attack for finished_attack in current_attacks if finished_attack != most_likely_traffic and finished_attack]
                 for attack in starting_attacks:
+                    if attack != "normal":
                         current_attacks[attack]=tensor[3]
                 for attack in finished_attacks:
-                    packet_handle = plt.plot([current_attacks[attack], tensor[3]], [attack_names[attack], attack_names[attack]], 'r')
+                    if attack != "normal":
+                        plt.plot([current_attacks[attack], tensor[3]], [attack_names[attack], attack_names[attack]], 'r')
 
         #Labels
         time_format = "%b %d, %Y %H:%M"

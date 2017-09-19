@@ -1,0 +1,31 @@
+#Recurrent nueral network pseudocode.
+
+Rough plans for turning the SOM into a neural network and improving the SOM.
+
+##Plan for RSOM. [Related paper](https://web.cs.dal.ca/%7Ett/CSCI650805/papers/tsom.pdf)
+
+RSOMs include a leaky vector for each neuron. The larger the leaky vector, the more the weights change. The smaller the leaky vector, the less the weights change.
+The leaky vector is updated based on how far the input is from the neuron and the previous leaky vector. The farther away the input is from the neuron, the larger
+the leaky vector becomes. The end result: a neuron that is consistently far away from the input will change more than a neuron that is consistently close to the input.
+Since the leaky vector is calculated using it's previous value, outlier inputs will not substantially influence the weight change. This seems to be the main advantage
+of a RSOM from what I can tell.
+
+For a neuron i, iteration n, constant alpha (0<alpha<1), and sigma(n), here are the new formulas that need to be implemented:
+
+ - Leaky Vector:  the leaky vector is calculated as y<sub>i</sub>(n,alpha)=(1-aplha)y<sub>i</sub>+alpha(x(n)-w<sub>i</sub>(n))
+
+ - BMU: Best matching unit needs to be changed to ||y<sub>i</sub>(n,alpha)|| = min||y<sub>j</sub>(n,alpha)|| where i is the best matching neuron and the minimum is over all neurons.
+
+ - Neighborhood functions: Remains the same. Is currently h<sub>i,b</sub>(n) = e <sup> -( || r<sub>i</sub> - r<sub>b</sub> ||<sup>2</sup> / sigma(n)<sup>2</sup> )</sup> where r<sub>i</sub> are the inputs and r<sub>b</sub>  are the corresponding bmus.
+
+ - Weight: Weight calculation needs to be changed to W<sub>i</sub>(n+1) = W<sub>i</sub>(n) + sigma(n)h<sub>i,b</sub>(n)y<sub>i</sub>(n,alpha)
+
+Changing all of these values will create a basic RSOM. With the goal of detecting DOS attacks, we might consider making the leaky vector be further dependent
+on some sort of packet trends such as the total number of packets received in X seconds.
+
+##Plan for GRSOM. [Relevant paper](https://web.cs.dal.ca/%7Ezincir/bildiri/smc07-onm.pdf)
+
+Similar to an RSOM except that it starts with one neuron and grows with time. Still working on the implementation specifics. Basic idea is that we start with one
+neuron. That neuron is fed inputs until its leaky vector reaches a threshold. Then another neuron is added. Both neurons are trained until the new neuron's leaky
+vector reaches a threshold. Then another neuron is added and so on and so forth. This process is continued until the maximum number of desired neurons is reached.
+Advantages as far as I can tell is that the GRSOM is more efficient.

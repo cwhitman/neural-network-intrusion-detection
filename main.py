@@ -9,7 +9,7 @@ import calendar
 from datetime import datetime
 
 
-# Enter files here. Files found at: https://ll.mit.edu/ideval/data/1998data.html
+# Enter files here. Files found at: https://www.ll.mit.edu/ideval/data/1998data.html
 tcpdump = r"outside.tcpdump"
 tcpdump_list = r"tcpout.list"
 #IMPORTANT: All pcap files use UTC time. List files times are based on the timezone where the data was recorded.
